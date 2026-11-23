@@ -234,7 +234,7 @@
     <!-- 即時鏡頭掃碼畫面 -->
     <div id="scannerView" class="scanner-wrap hidden">
       <div style="display:flex; gap:8px;">
-        <button type="button" id="zoomBtn" class="nav-btn" style="flex:1; padding:8px; font-size:13px;" onclick="toggleZoom()">🔍 變焦：2x</button>
+        <button type="button" id="zoomBtn" class="nav-btn" style="flex:1; padding:8px; font-size:13px;" onclick="toggleZoom()">🔍 變焦：1x</button>
         <button type="button" id="torchBtn" class="nav-btn" style="flex:1; padding:8px; font-size:13px;" onclick="toggleTorch()">💡 補光燈：關</button>
         <button type="button" id="voiceBtn" class="nav-btn" style="flex:1; padding:8px; font-size:13px;" onclick="toggleVoiceRead()">🔊 語音：關</button>
       </div>
@@ -795,7 +795,7 @@
   }
 
   // ================= 即時鏡頭掃碼模式 =================
-  let currentZoom = 2;
+  let currentZoom = 1;
   let torchOn = false;
 
   async function applyCameraEnhancements() {
@@ -891,7 +891,7 @@
       );
       isScannerRunning = true;
       await applyCameraEnhancements();
-      statusEl.textContent = '📷 已開啟 2x 變焦，請將手機拿遠約 20 公分對準條碼';
+      statusEl.textContent = '📷 鏡頭已就緒，請將條碼對準掃描框（若條碼太小可點上方切換 2x）';
     } catch (err) {
       isScannerRunning = false;
       statusEl.classList.add('error');
