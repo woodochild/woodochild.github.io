@@ -763,10 +763,58 @@
   }
 
   // ================= 即時鏡頭掃碼模式 =================
+  let currentZoom = 2;
+  let torchOn = false;
+
+  async function applyCameraEnhancements() {
+    if (!liveScanner || !isScannerRunning) return;
+    try {
+      const caps = liveScanner.getRunningTrackCapabilities ? liveScanner.getRunningTrackCapabilities() : {};
+      const adv = [];
+
+      // 強制開啟連續自動對焦（Android 特別有效）
+      if (caps.focusMode && caps.focusMode.includes('continuous')) {
+        adv.push({ focusMode: 'continuous' });
+      }
+      // 套用變焦（不超過該手機支援的最大值）
+      if (caps.zoom) {
+        const targetZoom = Math.min(Math.max(currentZoom, caps.zoom.min || 1), caps.zoom.max || 1);
+        adv.push({ zoom: targetZoom });
+        document.getElementById('zoomBtn').textContent = `🔍 變焦：${targetZoom}x`;
+      } else {
+        document.getElementById('zoomBtn').textContent = '🔍 變焦：不支援';
+      }
+
+      if (adv.length > 0) {
+        await liveScanner.applyVideoConstraints({ advanced: adv });
+      }
+    } catch (e) {}
+  }
+
+  async function toggleZoom() {
+    currentZoom = (currentZoom === 2) ? 1 : 2;
+    await applyCameraEnhancements();
+  }
+
+  async function toggleTorch() {
+    if (!liveScanner || !isScannerRunning) return;
+    try {
+      torchOn = !torchOn;
+      await liveScanner.applyVideoConstraints({ advanced: [{ torch: torchOn }] });
+      document.getElementById('torchBtn').textContent = torchOn ? '💡 補光燈：開' : '💡 補光燈：關';
+    } catch (e) {
+      torchOn = false;
+      showToast('此手機瀏覽器不支援網頁補光燈');
+    }
+  }
+
   async function startLiveScanner() {
     const statusEl = document.getElementById('scanStatus');
     statusEl.classList.remove('error');
     statusEl.textContent = '正在啟動後置鏡頭...';
+    torchOn = false;
+    const tBtn = document.getElementById('torchBtn');
+    if (tBtn) tBtn.textContent = '💡 補光燈：關';
 
     try {
       if (!liveScanner) {
@@ -792,7 +840,10 @@
         { facingMode: 'environment' },
         {
           fps: 15,
-          qrbox: { width: 280, height: 130 },
+          qrbox: (viewfinderWidth, viewfinderHeight) => ({
+            width: Math.floor(viewfinderWidth * 0.9),
+            height: Math.floor(viewfinderHeight * 0.55)
+          }),
           videoConstraints: {
             facingMode: 'environment',
             width: { min: 640, ideal: 1280, max: 1920 },
@@ -807,13 +858,15 @@
         () => {}
       );
       isScannerRunning = true;
-      statusEl.textContent = '📷 鏡頭已就緒，請將條碼對準掃描框（iPhone 建議距離 15–20 公分）';
+      await applyCameraEnhancements();
+      statusEl.textContent = '📷 已開啟 2x 變焦，請將手機拿遠約 20 公分對準條碼';
     } catch (err) {
       isScannerRunning = false;
       statusEl.classList.add('error');
       statusEl.textContent = '無法開啟鏡頭（請允許瀏覽器相機權限），或使用下方輸入框。';
     }
   }
+
 
   async function stopLiveScanner() {
     if (liveScanner && isScannerRunning) {
