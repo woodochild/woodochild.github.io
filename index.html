@@ -1,0 +1,1532 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>藥品盤點系統</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f2f4f8; color: #1e293b; }
+    .hidden { display: none !important; }
+    .container { max-width: 480px; margin: 0 auto; min-height: 100vh; background: #fff; display: flex; flex-direction: column; }
+
+    .header { background: #0f766e; color: #fff; padding: 8px 12px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 25; }
+    .header h1 { margin: 0; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .header-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    .header-btn { background: rgba(255,255,255,0.2); border: none; color: #fff; padding: 6px 9px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+
+    .sync-bar { padding: 4px 12px; font-size: 12px; font-weight: 600; text-align: center; display: flex; justify-content: center; align-items: center; gap: 8px; }
+    .sync-bar.ok { background: #ecfdf5; color: #065f46; border-bottom: 1px solid #a7f3d0; }
+    .sync-bar.pending { background: #fef3c7; color: #92400e; border-bottom: 1px solid #fde68a; }
+    .sync-bar.error { background: #fee2e2; color: #b91c1c; border-bottom: 1px solid #fecaca; cursor: pointer; }
+
+    .login-box, .mode-box { padding: 28px 20px; }
+    .login-box h2, .mode-box h2 { margin-top: 0; color: #0f766e; text-align: center; }
+    .field { margin-bottom: 14px; }
+    .field label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px; color: #475569; }
+    .field input, .field select { width: 100%; padding: 12px; font-size: 16px; border: 1px solid #cbd5e1; border-radius: 8px; }
+    .btn-primary { width: 100%; padding: 14px; background: #0f766e; color: #fff; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; }
+    .btn-primary:disabled { background: #94a3b8; }
+
+    .mode-card { width: 100%; text-align: left; padding: 16px 16px; margin-bottom: 12px; border-radius: 12px; border: 2px solid #cbd5e1; background: #fff; cursor: pointer; display: flex; align-items: center; gap: 14px; }
+    .mode-card:active { transform: scale(0.99); }
+    .mode-card.zone { border-color: #0f766e; background: #f0fdfa; }
+    .mode-card.scan { border-color: #2563eb; background: #eff6ff; }
+    .mode-card.dash { border-color: #7c3aed; background: #f5f3ff; }
+    .mode-card.audit { border-color: #d97706; background: #fffbeb; }
+    .mode-icon { font-size: 30px; }
+    .mode-title { font-size: 17px; font-weight: 700; color: #0f172a; margin-bottom: 3px; }
+    .mode-desc { font-size: 13px; color: #475569; line-height: 1.35; }
+
+    /* 即時鏡頭掃碼區 */
+    .scanner-wrap { padding: 12px 14px; flex: 1; display: flex; flex-direction: column; gap: 10px; }
+    #live-reader { width: 100%; min-height: 240px; border-radius: 12px; overflow: hidden; background: #0f172a; }
+    .scan-status { text-align: center; font-size: 13px; color: #1e40af; background: #eff6ff; padding: 8px 12px; border-radius: 8px; border: 1px solid #bfdbfe; font-weight: 600; }
+    .scan-status.error { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+    .manual-scan-row { display: flex; gap: 6px; }
+    .manual-scan-row input { flex: 1; padding: 10px 12px; font-size: 15px; border: 1px solid #cbd5e1; border-radius: 8px; }
+    .manual-scan-row button { padding: 10px 16px; background: #0f766e; color: #fff; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; }
+
+    .filter-bar { padding: 6px 10px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
+    .select-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 5px; }
+    .select-row select { padding: 6px 4px; font-size: 13px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; }
+    .tool-row { display: flex; gap: 6px; align-items: center; }
+    .tool-row input { flex: 1; padding: 6px 8px; font-size: 13px; border: 1px solid #cbd5e1; border-radius: 6px; min-width: 0; }
+    .toggle-btn { padding: 6px 8px; font-size: 13px; font-weight: 600; border: 1px solid #0f766e; background: #fff; color: #0f766e; border-radius: 6px; white-space: nowrap; cursor: pointer; }
+    .toggle-btn.mode-uncounted { background: #0f766e; color: #fff; }
+    .toggle-btn.mode-recount { background: #2563eb; color: #fff; border-color: #2563eb; }
+    .toggle-btn.mode-warn { background: #d97706; color: #fff; border-color: #d97706; }
+
+    .progress-bar { padding: 4px 12px; background: #e2e8f0; font-size: 12px; display: flex; justify-content: space-between; color: #334155; font-weight: 600; }
+
+    .card { padding: 8px 12px 0; flex: 1; display: flex; flex-direction: column; }
+    .loc-badge { display: inline-block; background: #0f766e; color: #fff; font-size: 16px; font-weight: 700; padding: 2px 10px; border-radius: 8px; }
+    .loc-badge.scan-badge { background: #2563eb; }
+    .loc-badge.audit-badge { background: #d97706; }
+    .seq-tag { float: right; font-size: 12px; color: #64748b; margin-top: 4px; }
+    .med-name { font-size: 15px; font-weight: 700; margin: 5px 0 2px; line-height: 1.3; color: #0f172a; }
+    .med-sub { font-size: 12px; color: #64748b; margin-bottom: 5px; }
+
+    .record-box { background: #ecfdf5; border: 1px solid #6ee7b7; border-radius: 8px; padding: 5px 8px; margin-bottom: 6px; font-size: 12px; line-height: 1.35; }
+    .record-box.has-diff { background: #fffbeb; border-color: #fcd34d; }
+    .record-box.err-box { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+    .rec-line { color: #065f46; display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+    .rec-line.recount-line { color: #1e40af; border-top: 1px dashed #cbd5e1; margin-top: 3px; padding-top: 3px; }
+    .diff-badge { font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: #dcfce7; color: #166534; white-space: nowrap; }
+    .diff-badge.warn { background: #fee2e2; color: #b91c1c; }
+
+    .qty-box { background: #f8fafc; border: 2px solid #0f766e; border-radius: 10px; padding: 4px 10px; margin-bottom: 6px; }
+    .qty-box.recount-mode { border-color: #2563eb; }
+    .expr-preview { font-size: 12px; color: #64748b; min-height: 14px; text-align: right; }
+    .qty-display { font-size: 24px; font-weight: 700; text-align: right; color: #0f172a; min-height: 28px; word-break: break-all; }
+    .note-input { width: 100%; padding: 6px 8px; font-size: 13px; border: 1px solid #cbd5e1; border-radius: 6px; margin-bottom: 6px; }
+
+    .calc-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-bottom: 6px; }
+    .calc-btn { padding: 8px 0; font-size: 18px; font-weight: 600; border: none; border-radius: 8px; background: #e2e8f0; color: #1e293b; cursor: pointer; }
+    .calc-btn:active { background: #cbd5e1; }
+    .calc-btn.op { background: #fef3c7; color: #92400e; }
+    .calc-btn.clear { background: #fee2e2; color: #991b1b; }
+    .calc-btn.eq { background: #dbeafe; color: #1e40af; }
+
+    .nav-row {
+      display: grid; grid-template-columns: 1fr 2.2fr 1fr; gap: 8px;
+      position: sticky; bottom: 0; background: #fff; padding: 8px 0;
+      margin-top: auto; border-top: 1px solid #e2e8f0; z-index: 20;
+    }
+    .nav-row.scan-nav { grid-template-columns: 1fr 2.3fr; }
+    .nav-btn { padding: 11px 6px; font-size: 14px; font-weight: 600; border-radius: 8px; border: 1px solid #cbd5e1; background: #fff; color: #334155; cursor: pointer; }
+    .save-btn { background: #0f766e; color: #fff; border: none; }
+    .recount-btn { background: #2563eb; color: #fff; border: none; }
+
+    .sub-action-row { display: flex; justify-content: space-between; align-items: center; margin-top: 2px; padding-bottom: 8px; gap: 8px; }
+    .sub-action-btn { flex: 1; padding: 6px; font-size: 12px; border-radius: 6px; border: 1px solid #cbd5e1; background: #f8fafc; color: #475569; cursor: pointer; }
+
+    .dash-wrap { padding: 12px; flex: 1; background: #f8fafc; }
+    .dash-summary { background: #0f766e; color: #fff; border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+    .dash-summary-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .dash-filter { width: 100%; padding: 10px; font-size: 14px; border: 1px solid #cbd5e1; border-radius: 8px; margin-bottom: 12px; background: #fff; font-weight: 600; }
+    .dash-sec-title { font-size: 14px; font-weight: 700; color: #0f766e; margin: 14px 0 6px; padding-left: 4px; border-left: 4px solid #0f766e; }
+    .dash-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+    .dash-card-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+    .dash-group-name { font-size: 15px; font-weight: 700; color: #0f172a; }
+    .dash-time { font-size: 11px; color: #64748b; }
+    .bar-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; font-size: 12px; }
+    .bar-label { width: 34px; color: #475569; font-weight: 600; flex-shrink: 0; }
+    .bar-track { flex: 1; height: 10px; background: #e2e8f0; border-radius: 6px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 6px; transition: width 0.3s; }
+    .bar-fill.init { background: #0d9488; }
+    .bar-fill.recount { background: #2563eb; }
+    .bar-pct { width: 78px; text-align: right; font-weight: 700; color: #334155; flex-shrink: 0; }
+
+    .audit-assign-bar { background: #fef3c7; color: #92400e; padding: 6px 12px; font-size: 12px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #fde68a; }
+    .audit-scope-btn { background: #fff; border: 1px solid #d97706; color: #b45309; padding: 3px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .audit-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+    .audit-ok-btn { width: 100%; padding: 18px; background: #16a34a; color: #fff; border: none; border-radius: 12px; font-size: 18px; font-weight: 700; cursor: pointer; box-shadow: 0 3px 8px rgba(22,163,74,0.25); }
+    .audit-ok-btn:active { transform: scale(0.99); background: #15803d; }
+    .audit-err-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .audit-err-btn { padding: 14px 8px; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; border: 2px solid; }
+    .audit-err-btn.missing { background: #fef2f2; color: #b91c1c; border-color: #f87171; }
+    .audit-err-btn.wrong { background: #fffbeb; color: #b45309; border-color: #fbbf24; }
+    .audit-nav-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; position: sticky; bottom: 0; background: #fff; padding: 10px 0; margin-top: auto; border-top: 1px solid #e2e8f0; }
+
+    .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
+    .modal { background: #fff; width: 100%; max-width: 420px; max-height: 85vh; overflow-y: auto; border-radius: 12px; padding: 20px; }
+    .modal h3 { margin-top: 0; color: #0f766e; }
+    .bind-item { width: 100%; text-align: left; padding: 10px; margin-bottom: 6px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; cursor: pointer; }
+    .bind-item:active { background: #e2e8f0; }
+    .toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: rgba(15,23,42,0.92); color: #fff; padding: 8px 16px; border-radius: 20px; font-size: 14px; z-index: 100; }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <!-- 1. 登入畫面 -->
+  <div id="loginView" class="login-box">
+    <h2>💊 藥品盤點系統</h2>
+    <div id="autoLoginMsg" class="hidden" style="text-align:center; padding:18px; color:#0f766e; font-weight:600;">
+      正在驗證登入憑證並載入藥品清單...
+    </div>
+    <div id="loginForm">
+      <div class="field">
+        <label>盤點人員（姓名或員編）</label>
+        <input type="text" id="loginUser" placeholder="例如：王小明">
+      </div>
+      <div class="field">
+        <label>盤點密碼</label>
+        <input type="password" id="loginPwd" placeholder="請輸入公用密碼" onkeydown="if(event.key==='Enter') doLogin()">
+      </div>
+      <button id="loginBtn" class="btn-primary" onclick="doLogin()">登入並載入藥品清單</button>
+      <p style="text-align:center; font-size:12px; color:#64748b; margin-top:10px;">登入後將自動保持 4 小時免重複登入</p>
+    </div>
+    <p id="loginErr" style="color:#dc2626; text-align:center; font-size:14px;"></p>
+  </div>
+
+  <!-- 2. 模式選擇畫面 -->
+  <div id="modeView" class="mode-box hidden">
+    <h2>請選擇作業模式</h2>
+    <p style="text-align:center; color:#64748b; margin-top:-8px; margin-bottom:20px; font-size:14px;">
+      登入人員：<strong id="modeUserDisplay"></strong>（已載入 <span id="totalLoadedCount">0</span> 筆單位）
+    </p>
+    <button id="modeAuditCard" class="mode-card audit hidden" onclick="openAuditMode()">
+      <div class="mode-icon">🔍</div>
+      <div>
+        <div class="mode-title">料位號查核（盤前核對）</div>
+        <div class="mode-desc">核對負責區域的料位與藥品是否相符，快速回報架上無藥、料位錯誤或架上多藥</div>
+      </div>
+    </button>
+    <button class="mode-card zone" onclick="enterMode('zone')">
+      <div class="mode-icon">🗂️</div>
+      <div>
+        <div class="mode-title">區域／調劑台模式</div>
+        <div class="mode-desc">選擇調劑台（1'台、2'台、1台、2台、共用區）或各區，獨立初盤與復盤</div>
+      </div>
+    </button>
+    <button class="mode-card scan" onclick="enterMode('scan')">
+      <div class="mode-icon">📷</div>
+      <div>
+        <div class="mode-title">即時掃碼模式（免按快門）</div>
+        <div class="mode-desc">開啟鏡頭對準條碼自動辨識，輸入數量存檔後自動續掃下一支</div>
+      </div>
+    </button>
+    <button class="mode-card dash" onclick="openDashboard()">
+      <div class="mode-icon">📊</div>
+      <div>
+        <div class="mode-title">盤點進度儀表板</div>
+        <div class="mode-desc">即時查看各群組初盤／復盤百分比（0–100%）與最後盤點時間</div>
+      </div>
+    </button>
+    <button class="nav-btn" style="width:100%; margin-top:8px;" onclick="logout()">登出切換人員</button>
+  </div>
+
+  <!-- 3. 正式盤點作業畫面 -->
+  <div id="mainView" class="hidden" style="display:flex; flex-direction:column; flex:1;">
+    <div class="header">
+      <h1>💊 <span id="modeBadge">區域</span> (<span id="userDisplay"></span>)</h1>
+      <div class="header-actions">
+        <button class="header-btn" onclick="backToModeSelect()">切換模式</button>
+        <button class="header-btn" onclick="openAddModal()">＋補登</button>
+        <button class="header-btn" onclick="logout()">登出</button>
+      </div>
+    </div>
+
+    <div id="syncBar" class="sync-bar ok" onclick="manualRetrySync()">✅ 資料已全部同步</div>
+
+    <div id="zoneControls">
+      <div class="filter-bar">
+        <div class="select-row">
+          <select id="selMajor" onchange="onMajorChange()"></select>
+          <select id="selGroup" onchange="onGroupChange()"></select>
+          <select id="selSubcat" onchange="applyFilter()"></select>
+        </div>
+        <div class="tool-row">
+          <input type="text" id="searchInput" placeholder="搜尋料位 / 藥名 / 藥碼" oninput="applyFilter()">
+          <button id="filterModeBtn" class="toggle-btn" onclick="cycleFilterMode()">篩選：全部</button>
+        </div>
+      </div>
+      <div class="progress-bar">
+        <span id="progressText">初盤 0 / 0 ｜ 復盤 0</span>
+        <span id="indexText">第 0 / 0 筆</span>
+      </div>
+    </div>
+
+    <!-- 即時鏡頭掃碼畫面 -->
+    <div id="scannerView" class="scanner-wrap hidden">
+      <div id="live-reader"></div>
+      <div id="scanStatus" class="scan-status">📷 請將藥盒條碼對準上方掃描框</div>
+      <div id="scanNotFoundBox" class="hidden" style="background:#fef2f2; border:1px solid #fecaca; border-radius:10px; padding:14px; text-align:center;">
+        <div id="scanNotFoundText" style="color:#b91c1c; font-weight:600; margin-bottom:10px; font-size:14px;"></div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
+          <button class="btn-primary" style="padding:10px; font-size:14px; background:#2563eb;" onclick="openBindModal()">🔗 綁定現有藥品</button>
+          <button class="btn-primary" style="padding:10px; font-size:14px;" onclick="openAddFromScan()">＋ 補登新藥</button>
+        </div>
+        <button class="nav-btn" style="width:100%; padding:8px;" onclick="openScannerView()">📷 繼續掃描</button>
+      </div>
+      <div class="manual-scan-row">
+        <input type="text" id="manualCodeInput" placeholder="條碼槍掃入 或 手動輸入藥碼..." onkeydown="if(event.key==='Enter') handleManualCode()">
+        <button onclick="handleManualCode()">查詢</button>
+      </div>
+    </div>
+
+    <div id="emptyState" class="hidden" style="padding:40px 20px; text-align:center; color:#64748b;">
+      此篩選條件下沒有藥品（或已全部完成 🎉）
+    </div>
+
+    <div id="cardView" class="card hidden">
+      <div>
+        <span id="dispLoc" class="loc-badge"></span>
+        <span id="dispSeq" class="seq-tag"></span>
+      </div>
+      <div id="dispName" class="med-name"></div>
+      <div id="dispSub" class="med-sub"></div>
+      <div id="recordBox" class="record-box hidden"></div>
+
+      <div id="qtyBox" class="qty-box">
+        <div id="exprPreview" class="expr-preview"></div>
+        <div id="qtyDisplay" class="qty-display">0</div>
+      </div>
+
+      <input type="text" id="noteInput" class="note-input" placeholder="備註（選填，如：近效期、破損、點錯原因）">
+
+      <div class="calc-grid">
+        <button class="calc-btn clear" onclick="calcClear()">C</button>
+        <button class="calc-btn clear" onclick="calcBack()">⌫</button>
+        <button class="calc-btn op" onclick="calcInput('/')">÷</button>
+        <button class="calc-btn op" onclick="calcInput('*')">×</button>
+
+        <button class="calc-btn" onclick="calcInput('7')">7</button>
+        <button class="calc-btn" onclick="calcInput('8')">8</button>
+        <button class="calc-btn" onclick="calcInput('9')">9</button>
+        <button class="calc-btn op" onclick="calcInput('-')">-</button>
+
+        <button class="calc-btn" onclick="calcInput('4')">4</button>
+        <button class="calc-btn" onclick="calcInput('5')">5</button>
+        <button class="calc-btn" onclick="calcInput('6')">6</button>
+        <button class="calc-btn op" onclick="calcInput('+')">+</button>
+
+        <button class="calc-btn" onclick="calcInput('1')">1</button>
+        <button class="calc-btn" onclick="calcInput('2')">2</button>
+        <button class="calc-btn" onclick="calcInput('3')">3</button>
+        <button class="calc-btn eq" onclick="calcEval()">=</button>
+
+        <button class="calc-btn" style="grid-column: span 2;" onclick="calcInput('0')">0</button>
+        <button class="calc-btn" onclick="calcInput('.')">.</button>
+        <button class="calc-btn op" onclick="calcInput('00')">00</button>
+      </div>
+
+      <div id="navRow" class="nav-row">
+        <button id="prevBtn" class="nav-btn" onclick="moveItem(-1)">◀ 上一筆</button>
+        <button id="backScanBtn" class="nav-btn hidden" onclick="openScannerView()">📷 重掃</button>
+        <button id="saveInitBtn" class="nav-btn save-btn" onclick="submitCount('initial')">儲存初盤並下一筆 ▶</button>
+        <button id="saveRecountBtn" class="nav-btn recount-btn hidden" onclick="submitCount('recount')">✅ 復盤並下一筆 ▶</button>
+        <button id="nextBtn" class="nav-btn" onclick="moveItem(1)">跳過 ▶</button>
+      </div>
+
+      <div id="subActionRow" class="sub-action-row hidden">
+        <button class="sub-action-btn" onclick="copyInitialQty()">📋 帶入初盤數量</button>
+        <button class="sub-action-btn" onclick="submitCount('initial')">✏️ 修改初盤紀錄</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. 盤點進度儀表板 -->
+  <div id="dashboardView" class="hidden" style="display:flex; flex-direction:column; flex:1;">
+    <div class="header" style="background:#5b21b6;">
+      <h1>📊 盤點進度儀表板</h1>
+      <div class="header-actions">
+        <button id="dashRefreshBtn" class="header-btn" onclick="loadDashboard()">🔄 重新整理</button>
+        <button class="header-btn" onclick="closeDashboard()">返回</button>
+      </div>
+    </div>
+    <div class="dash-wrap">
+      <div id="dashOverall" class="dash-summary">載入中...</div>
+      <select id="dashFilterMajor" class="dash-filter" onchange="renderDashboardList()">
+        <option value="ALL">顯示全部台別／大區</option>
+      </select>
+      <div id="dashList"></div>
+    </div>
+  </div>
+
+  <!-- 5. 料位號查核模式 -->
+  <div id="auditView" class="hidden" style="display:flex; flex-direction:column; flex:1;">
+    <div class="header" style="background:#b45309;">
+      <h1>🔍 料位號查核 (<span id="auditUserDisplay"></span>)</h1>
+      <div class="header-actions">
+        <button class="header-btn" onclick="openAuditExtraModal()">＋架上多藥</button>
+        <button class="header-btn" onclick="closeAuditMode()">返回</button>
+      </div>
+    </div>
+
+    <div id="auditSyncBar" class="sync-bar ok" onclick="manualRetrySync()">✅ 資料已全部同步</div>
+
+    <div class="audit-assign-bar">
+      <span id="auditAssignText">負責區域載入中...</span>
+      <button id="auditScopeBtn" class="audit-scope-btn" onclick="toggleAuditScope()">切換：全部區域</button>
+    </div>
+
+    <div class="filter-bar">
+      <div class="select-row">
+        <select id="audMajor" onchange="onAuditMajorChange()"></select>
+        <select id="audGroup" onchange="onAuditGroupChange()"></select>
+        <select id="audSubcat" onchange="applyAuditFilter()"></select>
+      </div>
+      <div class="tool-row">
+        <input type="text" id="audSearchInput" placeholder="搜尋料位 / 藥名 / 藥碼" oninput="applyAuditFilter()">
+        <button id="audFilterModeBtn" class="toggle-btn mode-uncounted" onclick="cycleAuditFilterMode()">只看未查</button>
+      </div>
+    </div>
+
+    <div class="progress-bar">
+      <span id="audProgressText">已查 0 / 0 ｜ 異常 0</span>
+      <span id="audIndexText">第 0 / 0 筆</span>
+    </div>
+
+    <div id="auditEmptyState" class="hidden" style="padding:40px 20px; text-align:center; color:#64748b;">
+      此範圍內沒有待查核料位（已全部完成 🎉）
+    </div>
+
+    <div id="auditCardView" class="card hidden">
+      <div>
+        <span id="audDispLoc" class="loc-badge audit-badge"></span>
+        <span id="audDispSeq" class="seq-tag"></span>
+      </div>
+      <div id="audDispName" class="med-name" style="font-size:17px; margin-top:8px;"></div>
+      <div id="audDispSub" class="med-sub" style="margin-bottom:10px;"></div>
+      <div id="audRecordBox" class="record-box hidden"></div>
+
+      <input type="text" id="audNoteInput" class="note-input" style="padding:10px;" placeholder="備註／實際正確料位號（若料位號錯誤可填此欄）">
+
+      <div class="audit-actions">
+        <button class="audit-ok-btn" onclick="submitAuditResult('正確')">✅ 正確（下一筆）</button>
+        <div class="audit-err-grid">
+          <button class="audit-err-btn missing" onclick="submitAuditResult('架上沒有此藥')">❌ 架上沒有此藥</button>
+          <button class="audit-err-btn wrong" onclick="submitAuditResult('料位號錯誤')">⚠️ 料位號錯誤</button>
+        </div>
+      </div>
+
+      <div class="audit-nav-row">
+        <button class="nav-btn" onclick="moveAuditItem(-1)">◀ 上一筆</button>
+        <button class="nav-btn" onclick="moveAuditItem(1)">跳過 ▶</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 綁定條碼彈窗 -->
+<div id="bindModal" class="modal-bg hidden">
+  <div class="modal">
+    <h3>🔗 綁定條碼至現有藥品</h3>
+    <p style="font-size:13px; color:#475569; margin-top:-6px;">條碼：<strong id="bindCodeDisplay"></strong></p>
+    <div class="field">
+      <input type="text" id="bindSearchInput" placeholder="輸入藥名或藥碼搜尋..." oninput="renderBindList()">
+    </div>
+    <div id="bindResultList" style="max-height:260px; overflow-y:auto; margin-bottom:12px;"></div>
+    <button class="nav-btn" style="width:100%;" onclick="closeBindModal()">取消</button>
+  </div>
+</div>
+
+<!-- 臨時補登彈窗 -->
+<div id="addModal" class="modal-bg hidden">
+  <div class="modal">
+    <h3>＋ 補登未建檔藥品</h3>
+    <div class="field"><label>料位號</label><input id="addLoc" placeholder="例如：1A抽1-15"></div>
+    <div class="field"><label>藥碼 FDXID（若無可填無）</label><input id="addId" placeholder="例如：MXXX1"></div>
+    <div class="field"><label>藥品名稱</label><input id="addName" placeholder="請輸入藥品名稱"></div>
+    <div class="field"><label>盤點數量</label><input id="addQty" type="number" inputmode="decimal" placeholder="請輸入數量"></div>
+    <div style="display:flex; gap:8px;">
+      <button class="nav-btn" style="flex:1;" onclick="closeAddModal()">取消</button>
+      <button id="addSaveBtn" class="btn-primary" style="flex:1;" onclick="submitExtra()">送出補登</button>
+    </div>
+  </div>
+</div>
+
+<!-- 架上多藥回報彈窗 -->
+<div id="auditExtraModal" class="modal-bg hidden">
+  <div class="modal">
+    <h3 style="color:#b45309;">＋ 回報架上多出藥品</h3>
+    <p style="font-size:12px; color:#64748b; margin-top:-6px;">現場有這支藥，但清單沒出現在這個料位號上</p>
+    <div class="field">
+      <label>快速搜尋院內藥品（可選填點選帶入）</label>
+      <input id="audExtraSearch" placeholder="輸入藥名或藥碼關鍵字..." oninput="renderAuditExtraSearch()">
+      <div id="audExtraList" style="max-height:130px; overflow-y:auto; margin-top:6px;"></div>
+    </div>
+    <div class="field"><label>實際所在料位號（必填）</label><input id="audExtraLoc" placeholder="例如：1'台 1A抽1-08"></div>
+    <div class="field"><label>藥品名稱（必填）</label><input id="audExtraName" placeholder="點上方搜尋結果或手動輸入藥名"></div>
+    <div class="field"><label>藥碼 FDXID（選填）</label><input id="audExtraId" placeholder="自動帶入或留空"></div>
+    <div class="field"><label>備註（選填）</label><input id="audExtraNote" placeholder="例如：新進藥品、與隔壁藥混放"></div>
+    <div style="display:flex; gap:8px;">
+      <button class="nav-btn" style="flex:1;" onclick="closeAuditExtraModal()">取消</button>
+      <button class="btn-primary" style="flex:1; background:#b45309;" onclick="submitAuditExtra()">送出回報</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script>
+  // ================= ⚠️ 請把下方換成你的 Apps Script 部署網址（/exec 結尾） =================
+  const GAS_API_URL = 'https://woodochild.github.io';
+  // ======================================================================================
+
+  async function callApi(action, payload = {}) {
+    const resp = await fetch(GAS_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action, payload })
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    return await resp.json();
+  }
+
+  let currentUser = '';
+  let appMode = 'zone';
+  let allItems = [];
+  let barcodeMap = {};
+  let enableAudit = true;
+  let auditAssignments = [];
+  let filteredItems = [];
+  let currentIndex = 0;
+  let filterMode = 'ALL';
+  let expr = '';
+  let lastFailedCode = '';
+
+  // 即時鏡頭掃碼器狀態
+  let liveScanner = null;
+  let isScannerRunning = false;
+
+  // 料位號查核狀態
+  let auditOnlyMine = true;
+  let auditFilterMode = 'UNAUDITED';
+  let auditFilteredItems = [];
+  let auditIndex = 0;
+
+  const MAJOR_PRIORITY = [
+    "1'台", "2'台", '1台', '2台', "1'及2'共用", '1及2共用',
+    '1F冰箱', '1F備藥區', '1F分包機', '1F管制藥', '急診兒科', 'B1藥局', '其他'
+  ];
+
+  // ================= 掃碼成功提示音 =================
+  function playBeep() {
+    try {
+      if (navigator.vibrate) navigator.vibrate(80);
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 1200;
+      gain.gain.value = 0.15;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      setTimeout(() => { osc.stop(); ctx.close(); }, 100);
+    } catch (e) {}
+  }
+
+  // ================= 背景同步佇列 =================
+  const QUEUE_KEY = 'inv_sync_queue';
+  let syncQueue = [];
+  let isSyncing = false;
+  let syncHasError = false;
+  let retryTimer = null;
+
+  function loadQueueFromStorage() {
+    try {
+      const raw = localStorage.getItem(QUEUE_KEY);
+      syncQueue = raw ? JSON.parse(raw) : [];
+    } catch (e) { syncQueue = []; }
+  }
+  function saveQueueToStorage() {
+    try { localStorage.setItem(QUEUE_KEY, JSON.stringify(syncQueue)); } catch (e) {}
+  }
+  function updateSyncBar() {
+    ['syncBar', 'auditSyncBar'].forEach(id => {
+      const bar = document.getElementById(id);
+      if (!bar) return;
+      bar.classList.remove('ok', 'pending', 'error');
+      if (syncQueue.length === 0) {
+        syncHasError = false;
+        bar.classList.add('ok');
+        bar.textContent = '✅ 資料已全部同步';
+      } else if (syncHasError) {
+        bar.classList.add('error');
+        bar.textContent = `⚠️ 尚有 ${syncQueue.length} 筆上傳失敗（5秒後自動重試，點此立即重試）`;
+      } else {
+        bar.classList.add('pending');
+        bar.textContent = `⏳ 背景上傳中... 尚有 ${syncQueue.length} 筆（可繼續操作下一筆）`;
+      }
+    });
+  }
+  function enqueueJob(type, payload) {
+    syncQueue.push({ id: Date.now() + '_' + Math.random().toString(36).slice(2, 6), type, payload });
+    saveQueueToStorage();
+    syncHasError = false;
+    updateSyncBar();
+    processSyncQueue();
+  }
+  function manualRetrySync() {
+    if (syncQueue.length === 0) return;
+    if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
+    syncHasError = false;
+    updateSyncBar();
+    processSyncQueue();
+  }
+  async function processSyncQueue() {
+    if (isSyncing || syncQueue.length === 0) return;
+    isSyncing = true;
+    updateSyncBar();
+    const job = syncQueue[0];
+    try {
+      const action = job.type === 'audit' ? 'saveAudit' : 'saveCount';
+      const res = await callApi(action, job.payload);
+      isSyncing = false;
+      if (res && res.ok) {
+        syncQueue.shift();
+        saveQueueToStorage();
+        syncHasError = false;
+        updateSyncBar();
+        if (syncQueue.length > 0) processSyncQueue();
+      } else {
+        syncHasError = true;
+        updateSyncBar();
+        scheduleRetry();
+      }
+    } catch (e) {
+      isSyncing = false;
+      syncHasError = true;
+      updateSyncBar();
+      scheduleRetry();
+    }
+  }
+  function scheduleRetry() {
+    if (retryTimer) clearTimeout(retryTimer);
+    retryTimer = setTimeout(() => {
+      retryTimer = null;
+      if (syncQueue.length > 0 && !isSyncing) {
+        syncHasError = false;
+        processSyncQueue();
+      }
+    }, 5000);
+  }
+  window.addEventListener('beforeunload', e => {
+    if (syncQueue.length > 0) {
+      e.preventDefault();
+      e.returnValue = '尚有資料正在背景上傳，確定要離開嗎？';
+    }
+  });
+  function nowLocalStr() {
+    const d = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  }
+
+  // ================= 啟動時檢查 4 小時 Token =================
+  window.onload = async () => {
+    loadQueueFromStorage();
+    const savedUser = localStorage.getItem('inv_user');
+    if (savedUser) document.getElementById('loginUser').value = savedUser;
+
+    const savedToken = localStorage.getItem('inv_token');
+    const savedExp = Number(localStorage.getItem('inv_exp') || 0);
+    if (savedToken && Date.now() < savedExp) {
+      document.getElementById('loginForm').classList.add('hidden');
+      document.getElementById('autoLoginMsg').classList.remove('hidden');
+      try {
+        const res = await callApi('verifyTokenAndLoadData', { token: savedToken });
+        document.getElementById('autoLoginMsg').classList.add('hidden');
+        if (!res.ok) {
+          localStorage.removeItem('inv_token');
+          localStorage.removeItem('inv_exp');
+          document.getElementById('loginForm').classList.remove('hidden');
+          document.getElementById('loginErr').textContent = res.msg;
+          return;
+        }
+        onAuthSuccess(res);
+      } catch (e) {
+        document.getElementById('autoLoginMsg').classList.add('hidden');
+        document.getElementById('loginForm').classList.remove('hidden');
+      }
+    } else {
+      localStorage.removeItem('inv_token');
+      localStorage.removeItem('inv_exp');
+    }
+  };
+
+  function isCounted(val) { return val !== '' && val !== null && val !== undefined; }
+  function toHalf(str) { return String(str || '').replace(/[Ａ-Ｚａ-ｚ０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)); }
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.remove('hidden');
+    setTimeout(() => t.classList.add('hidden'), 1400);
+  }
+  function normalizeBarcode(raw) {
+    const s = toHalf(raw).trim().toUpperCase();
+    const gs1 = s.match(/^\(?01\)?(\d{14})/);
+    return gs1 ? gs1[1] : s;
+  }
+  function sortMajors(list) {
+    const uniq = [...new Set(list)];
+    return [
+      ...MAJOR_PRIORITY.filter(p => uniq.includes(p)),
+      ...uniq.filter(m => !MAJOR_PRIORITY.includes(m))
+    ];
+  }
+
+  function onAuthSuccess(res) {
+    currentUser = res.user;
+    localStorage.setItem('inv_user', res.user);
+    if (res.token) localStorage.setItem('inv_token', res.token);
+    if (res.expiresAt) localStorage.setItem('inv_exp', String(res.expiresAt));
+
+    allItems = res.items || [];
+    barcodeMap = res.barcodeMap || {};
+    enableAudit = res.enableAudit !== false;
+    auditAssignments = res.auditAssignments || [];
+
+    document.getElementById('modeAuditCard').classList.toggle('hidden', !enableAudit);
+
+    loadQueueFromStorage();
+    if (syncQueue.length > 0) {
+      syncQueue.forEach(job => {
+        const p = job.payload;
+        if (job.type === 'audit') {
+          if (p.type === '架上多藥') return;
+          const found = allItems.find(i => i.seq === p.seq);
+          if (found) { found.auditStatus = p.status; found.auditNote = p.note; found.auditUser = p.user; }
+        } else {
+          if (p.mode === 'scan' || p.mode === 'extra') return;
+          const found = allItems.find(i => i.seq === p.seq);
+          if (found) {
+            if (p.mode === 'recount') { found.reQty = p.qty; found.reUser = p.user; }
+            else { found.qty = p.qty; found.user = p.user; }
+            if (p.note) found.note = p.note;
+          }
+        }
+      });
+      processSyncQueue();
+    }
+    updateSyncBar();
+
+    document.getElementById('userDisplay').textContent = currentUser;
+    document.getElementById('auditUserDisplay').textContent = currentUser;
+    document.getElementById('modeUserDisplay').textContent = currentUser;
+    document.getElementById('totalLoadedCount').textContent = allItems.length;
+    document.getElementById('loginView').classList.add('hidden');
+    document.getElementById('modeView').classList.remove('hidden');
+    initFilters();
+  }
+
+  async function doLogin() {
+    const user = document.getElementById('loginUser').value.trim();
+    const pwd = document.getElementById('loginPwd').value.trim();
+    const btn = document.getElementById('loginBtn');
+    const err = document.getElementById('loginErr');
+    err.textContent = '';
+    btn.disabled = true;
+    btn.textContent = '載入中...';
+
+    try {
+      const res = await callApi('loginAndLoadData', { userName: user, password: pwd });
+      btn.disabled = false;
+      btn.textContent = '登入並載入藥品清單';
+      if (!res.ok) { err.textContent = res.msg; return; }
+      onAuthSuccess(res);
+    } catch (e) {
+      btn.disabled = false;
+      btn.textContent = '登入並載入藥品清單';
+      err.textContent = '連線錯誤（請確認 GAS_API_URL 與部署權限）：' + e.message;
+    }
+  }
+
+  function enterMode(mode) {
+    appMode = mode;
+    document.getElementById('modeView').classList.add('hidden');
+    document.getElementById('mainView').classList.remove('hidden');
+    document.getElementById('modeBadge').textContent = mode === 'scan' ? '掃碼' : '區域';
+    updateSyncBar();
+
+    if (mode === 'zone') {
+      stopLiveScanner();
+      document.getElementById('zoneControls').classList.remove('hidden');
+      document.getElementById('scannerView').classList.add('hidden');
+      applyFilter();
+    } else {
+      document.getElementById('zoneControls').classList.add('hidden');
+      document.getElementById('emptyState').classList.add('hidden');
+      openScannerView();
+    }
+  }
+
+  function backToModeSelect() {
+    stopLiveScanner();
+    document.getElementById('mainView').classList.add('hidden');
+    document.getElementById('modeView').classList.remove('hidden');
+  }
+
+  function logout() {
+    if (syncQueue.length > 0) {
+      alert(`尚有 ${syncQueue.length} 筆資料正在背景上傳至試算表，請稍候幾秒待上方顯示「✅ 資料已全部同步」後再登出！`);
+      manualRetrySync();
+      return;
+    }
+    stopLiveScanner();
+    localStorage.removeItem('inv_token');
+    localStorage.removeItem('inv_exp');
+    document.getElementById('loginPwd').value = '';
+    document.getElementById('loginForm').classList.remove('hidden');
+    document.getElementById('mainView').classList.add('hidden');
+    document.getElementById('modeView').classList.add('hidden');
+    document.getElementById('dashboardView').classList.add('hidden');
+    document.getElementById('auditView').classList.add('hidden');
+    document.getElementById('loginView').classList.remove('hidden');
+  }
+
+  // ================= 即時鏡頭掃碼模式 =================
+  async function startLiveScanner() {
+    const statusEl = document.getElementById('scanStatus');
+    statusEl.classList.remove('error');
+    statusEl.textContent = '正在啟動後置鏡頭...';
+
+    try {
+      if (!liveScanner) liveScanner = new Html5Qrcode('live-reader');
+      if (isScannerRunning) return;
+
+      await liveScanner.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 260, height: 140 } },
+        (decodedText) => {
+          playBeep();
+          stopLiveScanner();
+          onCodeDetected(decodedText);
+        },
+        () => {}
+      );
+      isScannerRunning = true;
+      statusEl.textContent = '📷 鏡頭已就緒，請將條碼對準掃描框';
+    } catch (err) {
+      isScannerRunning = false;
+      statusEl.classList.add('error');
+      statusEl.textContent = '無法開啟鏡頭（請允許瀏覽器相機權限），或使用下方輸入框。';
+    }
+  }
+
+  async function stopLiveScanner() {
+    if (liveScanner && isScannerRunning) {
+      try {
+        await liveScanner.stop();
+        liveScanner.clear();
+      } catch (e) {}
+      isScannerRunning = false;
+    }
+  }
+
+  function openScannerView() {
+    document.getElementById('cardView').classList.add('hidden');
+    document.getElementById('scanNotFoundBox').classList.add('hidden');
+    document.getElementById('scannerView').classList.remove('hidden');
+    document.getElementById('manualCodeInput').value = '';
+    startLiveScanner();
+  }
+
+  function handleManualCode() {
+    const val = document.getElementById('manualCodeInput').value.trim();
+    if (val) {
+      stopLiveScanner();
+      onCodeDetected(val);
+    }
+  }
+
+  function findDrugByCode(rawCode) {
+    const norm = normalizeBarcode(rawCode);
+    if (!norm) return null;
+    const mappedId = barcodeMap[norm] || barcodeMap[toHalf(rawCode).trim().toUpperCase()];
+    if (mappedId) {
+      const m = allItems.find(i => toHalf(i.fdxid).trim().toUpperCase() === mappedId);
+      if (m) return m;
+    }
+    let exact = allItems.find(i => {
+      const id = toHalf(i.fdxid).trim().toUpperCase();
+      const loc = toHalf(i.loc).trim().toUpperCase();
+      return id === norm || loc === norm;
+    });
+    if (exact) return exact;
+    return allItems.find(i => {
+      const id = toHalf(i.fdxid).trim().toUpperCase();
+      return id.length >= 4 && norm.includes(id);
+    }) || null;
+  }
+
+  function onCodeDetected(code) {
+    const norm = normalizeBarcode(code);
+    const match = findDrugByCode(code);
+    if (!match) {
+      lastFailedCode = norm;
+      document.getElementById('scanNotFoundText').textContent = `查無對應藥品：${norm}`;
+      document.getElementById('scanNotFoundBox').classList.remove('hidden');
+      document.getElementById('scanStatus').textContent = '可點下方「綁定現有藥品」建立永久條碼對照';
+      return;
+    }
+    document.getElementById('scannerView').classList.add('hidden');
+    filteredItems = [{
+      seq: 'SCAN-' + Date.now().toString().slice(-6),
+      major: '掃碼盤點', group: '', subcat: '免管料位（直接累加）', loc: '掃碼盤點',
+      fdxid: match.fdxid, name: match.name,
+      qty: '', user: '', time: '', reQty: '', reUser: '', reTime: '', note: ''
+    }];
+    currentIndex = 0;
+    renderCurrent();
+  }
+
+  // ================= 現場綁定條碼 =================
+  function openBindModal() {
+    document.getElementById('bindCodeDisplay').textContent = lastFailedCode;
+    document.getElementById('bindSearchInput').value = '';
+    document.getElementById('bindModal').classList.remove('hidden');
+    renderBindList();
+  }
+  function closeBindModal() { document.getElementById('bindModal').classList.add('hidden'); }
+  function renderBindList() {
+    const kw = document.getElementById('bindSearchInput').value.trim().toLowerCase();
+    const listEl = document.getElementById('bindResultList');
+    if (!kw) {
+      listEl.innerHTML = '<div style="color:#64748b; font-size:13px; text-align:center; padding:12px;">請輸入藥名或藥碼關鍵字</div>';
+      return;
+    }
+    const seen = new Set();
+    const meds = [];
+    for (const i of allItems) {
+      if (seen.has(i.fdxid)) continue;
+      if (`${i.fdxid} ${i.name}`.toLowerCase().includes(kw)) {
+        seen.add(i.fdxid); meds.push(i);
+        if (meds.length >= 20) break;
+      }
+    }
+    listEl.innerHTML = '';
+    if (meds.length === 0) {
+      listEl.innerHTML = '<div style="color:#64748b; font-size:13px; text-align:center; padding:12px;">找不到相符藥品</div>';
+      return;
+    }
+    meds.forEach(m => {
+      const btn = document.createElement('button');
+      btn.className = 'bind-item';
+      btn.innerHTML = `<div style="font-weight:700; color:#0f766e;">${m.fdxid}</div><div style="font-size:13px; color:#334155;">${m.name}</div>`;
+      btn.onclick = () => confirmBind(m);
+      listEl.appendChild(btn);
+    });
+  }
+  async function confirmBind(med) {
+    if (!confirm(`確定將條碼「${lastFailedCode}」永久綁定到：\n${med.fdxid} — ${med.name}？`)) return;
+    try {
+      const res = await callApi('bindBarcode', {
+        barcode: lastFailedCode, fdxid: med.fdxid, name: med.name, user: currentUser
+      });
+      if (!res.ok) { alert(res.msg); return; }
+      barcodeMap[res.barcode] = res.fdxid;
+      showToast('綁定成功！正在開啟盤點...');
+      closeBindModal();
+      onCodeDetected(lastFailedCode);
+    } catch (e) {
+      alert('綁定失敗：' + e.message);
+    }
+  }
+  function openAddFromScan() { document.getElementById('addId').value = lastFailedCode; openAddModal(); }
+
+  // ================= 區域／調劑台模式篩選 =================
+  function initFilters() {
+    const majors = sortMajors(allItems.map(i => i.major));
+    document.getElementById('selMajor').innerHTML =
+      '<option value="ALL">全部台別/大區</option>' + majors.map(m => `<option value="${m}">${m}</option>`).join('');
+    onMajorChange();
+  }
+  function onMajorChange() {
+    const major = document.getElementById('selMajor').value;
+    const subset = major === 'ALL' ? allItems : allItems.filter(i => i.major === major);
+    const groups = [...new Set(subset.map(i => i.group))];
+    document.getElementById('selGroup').innerHTML = '<option value="ALL">全部群組</option>' + groups.map(g => `<option value="${g}">${g}</option>`).join('');
+    onGroupChange();
+  }
+  function onGroupChange() {
+    const major = document.getElementById('selMajor').value;
+    const group = document.getElementById('selGroup').value;
+    let subset = allItems;
+    if (major !== 'ALL') subset = subset.filter(i => i.major === major);
+    if (group !== 'ALL') subset = subset.filter(i => i.group === group);
+    const subcats = [...new Set(subset.map(i => i.subcat))];
+    document.getElementById('selSubcat').innerHTML = '<option value="ALL">全部小類</option>' + subcats.map(s => `<option value="${s}">${s}</option>`).join('');
+    if (appMode === 'zone') applyFilter();
+  }
+  function cycleFilterMode() {
+    const btn = document.getElementById('filterModeBtn');
+    btn.classList.remove('mode-uncounted', 'mode-recount');
+    if (filterMode === 'ALL') { filterMode = 'UNCOUNTED'; btn.textContent = '只看未盤'; btn.classList.add('mode-uncounted'); }
+    else if (filterMode === 'UNCOUNTED') { filterMode = 'NEED_RECOUNT'; btn.textContent = '只看待復盤'; btn.classList.add('mode-recount'); }
+    else { filterMode = 'ALL'; btn.textContent = '篩選：全部'; }
+    applyFilter();
+  }
+  function getScopeItems() {
+    const major = document.getElementById('selMajor').value;
+    const group = document.getElementById('selGroup').value;
+    const subcat = document.getElementById('selSubcat').value;
+    return allItems.filter(i =>
+      (major === 'ALL' || i.major === major) &&
+      (group === 'ALL' || i.group === group) &&
+      (subcat === 'ALL' || i.subcat === subcat)
+    );
+  }
+  function updateProgressText() {
+    const scope = getScopeItems();
+    document.getElementById('progressText').textContent =
+      `初盤 ${scope.filter(i => isCounted(i.qty)).length}/${scope.length} ｜ 復盤 ${scope.filter(i => isCounted(i.reQty)).length}`;
+  }
+  function applyFilter() {
+    const scope = getScopeItems();
+    updateProgressText();
+    const kw = document.getElementById('searchInput').value.trim().toLowerCase();
+    filteredItems = scope.filter(i => {
+      if (filterMode === 'UNCOUNTED' && isCounted(i.qty)) return false;
+      if (filterMode === 'NEED_RECOUNT' && (!isCounted(i.qty) || isCounted(i.reQty))) return false;
+      if (kw && !`${i.major} ${i.loc} ${i.name} ${i.fdxid}`.toLowerCase().includes(kw)) return false;
+      return true;
+    });
+    currentIndex = 0;
+    renderCurrent();
+  }
+  function shortTime(t) {
+    if (!t) return '';
+    const p = String(t).split(' ');
+    return p.length > 1 ? p[1].slice(0, 5) : t;
+  }
+
+  // ================= 盤點卡片與計算機 =================
+  function renderCurrent() {
+    if (filteredItems.length === 0) {
+      document.getElementById('cardView').classList.add('hidden');
+      if (appMode === 'zone') {
+        document.getElementById('emptyState').classList.remove('hidden');
+        document.getElementById('indexText').textContent = '第 0 / 0 筆';
+      }
+      return;
+    }
+    document.getElementById('cardView').classList.remove('hidden');
+    document.getElementById('emptyState').classList.add('hidden');
+
+    if (currentIndex >= filteredItems.length) currentIndex = filteredItems.length - 1;
+    if (currentIndex < 0) currentIndex = 0;
+
+    const item = filteredItems[currentIndex];
+    const isScan = appMode === 'scan';
+    if (!isScan) document.getElementById('indexText').textContent = `第 ${currentIndex + 1} / ${filteredItems.length} 筆`;
+
+    const locEl = document.getElementById('dispLoc');
+    locEl.classList.toggle('scan-badge', isScan);
+    locEl.textContent = isScan ? '📷 掃碼盤點' : `${item.major}｜${item.loc}`;
+    document.getElementById('dispSeq').textContent = isScan ? '直接累加' : `#${item.seq}`;
+    document.getElementById('dispName').textContent = item.name;
+    document.getElementById('dispSub').textContent = `藥碼：${item.fdxid} ｜ ${item.subcat}`;
+    document.getElementById('noteInput').value = item.note || '';
+
+    document.getElementById('navRow').classList.toggle('scan-nav', isScan);
+    document.getElementById('prevBtn').classList.toggle('hidden', isScan);
+    document.getElementById('nextBtn').classList.toggle('hidden', isScan);
+    document.getElementById('backScanBtn').classList.toggle('hidden', !isScan);
+
+    const recordBox = document.getElementById('recordBox');
+    const qtyBox = document.getElementById('qtyBox');
+    const initBtn = document.getElementById('saveInitBtn');
+    const recountBtn = document.getElementById('saveRecountBtn');
+    const subRow = document.getElementById('subActionRow');
+
+    if (isScan) {
+      recordBox.classList.add('hidden');
+      qtyBox.classList.remove('recount-mode');
+      initBtn.classList.remove('hidden');
+      initBtn.textContent = '儲存並繼續掃描 📷';
+      recountBtn.classList.add('hidden');
+      subRow.classList.add('hidden');
+      expr = '';
+      updateCalcDisplay();
+      return;
+    }
+
+    const hasInit = isCounted(item.qty);
+    const hasRecount = isCounted(item.reQty);
+    initBtn.textContent = '儲存初盤並下一筆 ▶';
+
+    if (hasInit) {
+      let html = `<div class="rec-line"><span><strong>初盤：${item.qty}</strong>（${item.user} ${shortTime(item.time)}）</span></div>`;
+      let hasDiff = false;
+      if (hasRecount) {
+        const diff = Math.round((item.reQty - item.qty) * 1000) / 1000;
+        hasDiff = diff !== 0;
+        const diffText = diff === 0 ? '✓ 相符' : `差異 ${diff > 0 ? '+' + diff : diff}`;
+        html += `<div class="rec-line recount-line"><span><strong>復盤：${item.reQty}</strong>（${item.reUser} ${shortTime(item.reTime)}）</span><span class="diff-badge ${hasDiff ? 'warn' : ''}">${diffText}</span></div>`;
+      }
+      recordBox.innerHTML = html;
+      recordBox.classList.remove('hidden');
+      recordBox.classList.toggle('has-diff', hasDiff);
+
+      qtyBox.classList.add('recount-mode');
+      initBtn.classList.add('hidden');
+      recountBtn.classList.remove('hidden');
+      recountBtn.textContent = hasRecount ? '✅ 更新復盤並下一筆 ▶' : '✅ 復盤並下一筆 ▶';
+      subRow.classList.remove('hidden');
+      expr = '';
+    } else {
+      recordBox.classList.add('hidden');
+      qtyBox.classList.remove('recount-mode');
+      initBtn.classList.remove('hidden');
+      recountBtn.classList.add('hidden');
+      subRow.classList.add('hidden');
+      expr = '';
+    }
+    updateCalcDisplay();
+  }
+
+  function copyInitialQty() {
+    if (filteredItems.length === 0) return;
+    const item = filteredItems[currentIndex];
+    if (isCounted(item.qty)) { expr = String(item.qty); updateCalcDisplay(); }
+  }
+  function calcInput(val) { expr += val; updateCalcDisplay(); }
+  function calcClear() { expr = ''; updateCalcDisplay(); }
+  function calcBack() { expr = expr.slice(0, -1); updateCalcDisplay(); }
+  function safeEval(str) {
+    if (!str) return 0;
+    const cleaned = str.replace(/[^0-9+\-*/.()]/g, '');
+    if (!cleaned) return 0;
+    try {
+      const val = Function('"use strict";return (' + cleaned + ')')();
+      return isFinite(val) ? Math.round(val * 1000) / 1000 : NaN;
+    } catch { return NaN; }
+  }
+  function calcEval() { const v = safeEval(expr); if (!isNaN(v)) { expr = String(v); updateCalcDisplay(); } }
+  function updateCalcDisplay() {
+    document.getElementById('qtyDisplay').textContent = expr.replace(/\*/g, '×').replace(/\//g, '÷') || '0';
+    if (/[+\-*/]/.test(expr)) {
+      const v = safeEval(expr);
+      document.getElementById('exprPreview').textContent = isNaN(v) ? '' : `= ${v}`;
+    } else {
+      document.getElementById('exprPreview').textContent = '';
+    }
+  }
+  function moveItem(delta) {
+    if (filteredItems.length === 0) return;
+    currentIndex = (currentIndex + delta + filteredItems.length) % filteredItems.length;
+    renderCurrent();
+  }
+
+  function submitCount(mode) {
+    if (filteredItems.length === 0) return;
+    const item = filteredItems[currentIndex];
+    if (expr === '' && !confirm('您尚未輸入數字，確定要將數量記為「0」嗎？')) return;
+
+    const qty = expr === '' ? 0 : safeEval(expr);
+    if (isNaN(qty) || qty < 0) { alert('數量格式不正確！'); return; }
+
+    const note = document.getElementById('noteInput').value.trim();
+
+    if (appMode === 'scan') {
+      enqueueJob('count', {
+        seq: item.seq, fdxid: item.fdxid, loc: '掃碼盤點', name: item.name,
+        qty, user: currentUser, note, mode: 'scan'
+      });
+      showToast(`已掃碼記錄 ${item.fdxid}：${qty}`);
+      openScannerView();
+      return;
+    }
+
+    if (mode === 'initial' && isCounted(item.qty)) {
+      if (!confirm(`確定要將初盤數量從 ${item.qty}（${item.user}）修改為 ${qty} 嗎？`)) return;
+    }
+    if (mode === 'recount') {
+      if (item.user === currentUser && !confirm(`初盤人員也是您（${currentUser}），確定由同一人復盤嗎？`)) return;
+      if (isCounted(item.qty) && qty !== Number(item.qty)) {
+        const diff = Math.round((qty - Number(item.qty)) * 1000) / 1000;
+        const okDiff = confirm(`⚠️ 復盤與初盤數量不同！\n初盤：${item.qty}（${item.user}）\n復盤：${qty}（差異：${diff > 0 ? '+' + diff : diff}）\n\n確定以復盤數量 ${qty} 作為最終採用量嗎？`);
+        if (!okDiff) return;
+      }
+    }
+
+    const nowStr = nowLocalStr();
+    if (mode === 'recount') {
+      item.reQty = qty; item.reUser = currentUser; item.reTime = nowStr;
+    } else {
+      item.qty = qty; item.user = currentUser; item.time = nowStr;
+    }
+    item.note = note;
+
+    enqueueJob('count', {
+      seq: item.seq, fdxid: item.fdxid, loc: `${item.major}-${item.loc}`, name: item.name,
+      qty, user: currentUser, note, mode
+    });
+
+    showToast(mode === 'recount' ? `已記錄復盤 ${item.loc}：${qty}` : `已記錄初盤 ${item.loc}：${qty}`);
+
+    if (filterMode !== 'ALL') {
+      applyFilter();
+    } else {
+      updateProgressText();
+      if (currentIndex < filteredItems.length - 1) { currentIndex++; renderCurrent(); }
+      else { renderCurrent(); showToast('已是本區最後一筆！'); }
+    }
+  }
+
+  function openAddModal() { document.getElementById('addModal').classList.remove('hidden'); }
+  function closeAddModal() { document.getElementById('addModal').classList.add('hidden'); }
+  function submitExtra() {
+    const loc = document.getElementById('addLoc').value.trim();
+    const fdxid = document.getElementById('addId').value.trim() || 'NEW';
+    const name = document.getElementById('addName').value.trim();
+    const qty = Number(document.getElementById('addQty').value);
+    if (!loc || !name || isNaN(qty)) { alert('請填寫料位、藥名與數量'); return; }
+
+    enqueueJob('count', {
+      seq: 'ADD-' + Date.now().toString().slice(-4),
+      fdxid, loc, name, qty, user: currentUser, note: '現場補登', mode: 'extra'
+    });
+    showToast('補登已加入同步佇列！');
+    closeAddModal();
+    document.getElementById('addLoc').value = '';
+    document.getElementById('addId').value = '';
+    document.getElementById('addName').value = '';
+    document.getElementById('addQty').value = '';
+    if (appMode === 'scan') openScannerView();
+  }
+
+  // ================= 盤點進度儀表板 =================
+  let dashCache = null;
+
+  function openDashboard() {
+    stopLiveScanner();
+    document.getElementById('modeView').classList.add('hidden');
+    document.getElementById('mainView').classList.add('hidden');
+    document.getElementById('auditView').classList.add('hidden');
+    document.getElementById('dashboardView').classList.remove('hidden');
+    loadDashboard();
+  }
+  function closeDashboard() {
+    document.getElementById('dashboardView').classList.add('hidden');
+    document.getElementById('modeView').classList.remove('hidden');
+  }
+  async function loadDashboard() {
+    const btn = document.getElementById('dashRefreshBtn');
+    btn.disabled = true;
+    btn.textContent = '更新中...';
+    try {
+      const res = await callApi('getDashboardData');
+      btn.disabled = false;
+      btn.textContent = '🔄 重新整理';
+      if (!res || !res.ok) {
+        document.getElementById('dashOverall').textContent = res ? res.msg : '讀取失敗';
+        return;
+      }
+      dashCache = res;
+      const sel = document.getElementById('dashFilterMajor');
+      const prevVal = sel.value;
+      sel.innerHTML = '<option value="ALL">顯示全部台別／大區</option>' +
+        res.sections.map(s => `<option value="${s.major}">${s.major}</option>`).join('');
+      if ([...sel.options].some(o => o.value === prevVal)) sel.value = prevVal;
+      renderDashboardList();
+    } catch (e) {
+      btn.disabled = false;
+      btn.textContent = '🔄 重新整理';
+      alert('儀表板讀取失敗：' + e.message);
+    }
+  }
+  function fmtDashTime(t) {
+    if (!t) return '尚未開始';
+    return String(t).length >= 16 ? String(t).slice(5, 16) : t;
+  }
+  function renderDashboardList() {
+    if (!dashCache) return;
+    const ov = dashCache.overall;
+    document.getElementById('dashOverall').innerHTML = `
+      <div class="dash-summary-top">
+        <strong>全院總進度</strong>
+        <span style="font-size:12px; opacity:0.9;">更新於 ${dashCache.updatedAt}</span>
+      </div>
+      <div style="font-size:14px; margin-bottom:4px;">初盤：<strong>${ov.initPct}%</strong>（${ov.init} / ${ov.total}）</div>
+      <div style="font-size:14px; margin-bottom:4px;">復盤：<strong>${ov.recountPct}%</strong>（${ov.recount} / ${ov.total}）</div>
+      <div style="font-size:12px; opacity:0.85;">最後盤點時間：${fmtDashTime(ov.lastTime)}</div>
+    `;
+
+    const filterMajor = document.getElementById('dashFilterMajor').value;
+    const listEl = document.getElementById('dashList');
+    let html = '';
+
+    dashCache.sections.forEach(sec => {
+      if (filterMajor !== 'ALL' && sec.major !== filterMajor) return;
+      html += `<div class="dash-sec-title">${sec.major}</div>`;
+      sec.groups.forEach(g => {
+        html += `
+          <div class="dash-card">
+            <div class="dash-card-head">
+              <span class="dash-group-name">${g.group}</span>
+              <span class="dash-time">最後：${fmtDashTime(g.lastTime)}</span>
+            </div>
+            <div class="bar-row">
+              <span class="bar-label">初盤</span>
+              <div class="bar-track"><div class="bar-fill init" style="width:${g.initPct}%"></div></div>
+              <span class="bar-pct">${g.initPct}% (${g.init}/${g.total})</span>
+            </div>
+            <div class="bar-row">
+              <span class="bar-label">復盤</span>
+              <div class="bar-track"><div class="bar-fill recount" style="width:${g.recountPct}%"></div></div>
+              <span class="bar-pct">${g.recountPct}% (${g.recount}/${g.total})</span>
+            </div>
+          </div>`;
+      });
+    });
+
+    listEl.innerHTML = html || '<div style="text-align:center; color:#64748b; padding:24px;">無資料</div>';
+  }
+
+  // ================= 料位號查核模式 =================
+  function getMyAssignments() {
+    const me = currentUser.trim().toLowerCase();
+    return auditAssignments.filter(a => a.user.trim().toLowerCase() === me);
+  }
+  function getAuditBaseItems() {
+    const mine = getMyAssignments();
+    if (!auditOnlyMine || mine.length === 0) return allItems;
+    return allItems.filter(item => mine.some(a =>
+      a.major === item.major && (!a.group || toHalf(a.group).toUpperCase() === toHalf(item.group).toUpperCase())
+    ));
+  }
+  function openAuditMode() {
+    stopLiveScanner();
+    document.getElementById('modeView').classList.add('hidden');
+    document.getElementById('mainView').classList.add('hidden');
+    document.getElementById('dashboardView').classList.add('hidden');
+    document.getElementById('auditView').classList.remove('hidden');
+    updateSyncBar();
+
+    const mine = getMyAssignments();
+    auditOnlyMine = mine.length > 0;
+    refreshAuditScopeUI();
+    initAuditFilters();
+  }
+  function closeAuditMode() {
+    document.getElementById('auditView').classList.add('hidden');
+    document.getElementById('modeView').classList.remove('hidden');
+  }
+  function toggleAuditScope() {
+    const mine = getMyAssignments();
+    if (mine.length === 0) {
+      showToast('核對人員分配表中尚未指定您的區域');
+      return;
+    }
+    auditOnlyMine = !auditOnlyMine;
+    refreshAuditScopeUI();
+    initAuditFilters();
+  }
+  function refreshAuditScopeUI() {
+    const mine = getMyAssignments();
+    const textEl = document.getElementById('auditAssignText');
+    const btnEl = document.getElementById('auditScopeBtn');
+    if (mine.length === 0) {
+      textEl.textContent = '分配表未指定您的區域（顯示全部）';
+      btnEl.classList.add('hidden');
+    } else if (auditOnlyMine) {
+      const desc = mine.map(a => a.group ? `${a.major}/${a.group}` : a.major).join('、');
+      textEl.textContent = `我負責：${desc}`;
+      btnEl.classList.remove('hidden');
+      btnEl.textContent = '切換：全部區域';
+    } else {
+      textEl.textContent = '目前顯示：全院所有區域';
+      btnEl.classList.remove('hidden');
+      btnEl.textContent = '切回：只看我負責';
+    }
+  }
+  function initAuditFilters() {
+    const base = getAuditBaseItems();
+    const majors = sortMajors(base.map(i => i.major));
+    document.getElementById('audMajor').innerHTML =
+      '<option value="ALL">全部台別/大區</option>' + majors.map(m => `<option value="${m}">${m}</option>`).join('');
+    onAuditMajorChange();
+  }
+  function onAuditMajorChange() {
+    const base = getAuditBaseItems();
+    const major = document.getElementById('audMajor').value;
+    const subset = major === 'ALL' ? base : base.filter(i => i.major === major);
+    const groups = [...new Set(subset.map(i => i.group))];
+    document.getElementById('audGroup').innerHTML =
+      '<option value="ALL">全部群組</option>' + groups.map(g => `<option value="${g}">${g}</option>`).join('');
+    onAuditGroupChange();
+  }
+  function onAuditGroupChange() {
+    const base = getAuditBaseItems();
+    const major = document.getElementById('audMajor').value;
+    const group = document.getElementById('audGroup').value;
+    let subset = base;
+    if (major !== 'ALL') subset = subset.filter(i => i.major === major);
+    if (group !== 'ALL') subset = subset.filter(i => i.group === group);
+    const subcats = [...new Set(subset.map(i => i.subcat))];
+    document.getElementById('audSubcat').innerHTML =
+      '<option value="ALL">全部小類</option>' + subcats.map(s => `<option value="${s}">${s}</option>`).join('');
+    applyAuditFilter();
+  }
+  function cycleAuditFilterMode() {
+    const btn = document.getElementById('audFilterModeBtn');
+    btn.classList.remove('mode-uncounted', 'mode-warn');
+    if (auditFilterMode === 'UNAUDITED') {
+      auditFilterMode = 'ISSUE';
+      btn.textContent = '只看異常';
+      btn.classList.add('mode-warn');
+    } else if (auditFilterMode === 'ISSUE') {
+      auditFilterMode = 'ALL';
+      btn.textContent = '篩選：全部';
+    } else {
+      auditFilterMode = 'UNAUDITED';
+      btn.textContent = '只看未查';
+      btn.classList.add('mode-uncounted');
+    }
+    applyAuditFilter();
+  }
+  function getAuditScopeItems() {
+    const base = getAuditBaseItems();
+    const major = document.getElementById('audMajor').value;
+    const group = document.getElementById('audGroup').value;
+    const subcat = document.getElementById('audSubcat').value;
+    return base.filter(i =>
+      (major === 'ALL' || i.major === major) &&
+      (group === 'ALL' || i.group === group) &&
+      (subcat === 'ALL' || i.subcat === subcat)
+    );
+  }
+  function updateAuditProgressText() {
+    const scope = getAuditScopeItems();
+    const done = scope.filter(i => i.auditStatus).length;
+    const issues = scope.filter(i => i.auditStatus && i.auditStatus !== '正確').length;
+    document.getElementById('audProgressText').textContent = `已查 ${done} / ${scope.length} ｜ 異常 ${issues}`;
+  }
+  function applyAuditFilter() {
+    const scope = getAuditScopeItems();
+    updateAuditProgressText();
+    const kw = document.getElementById('audSearchInput').value.trim().toLowerCase();
+    auditFilteredItems = scope.filter(i => {
+      if (auditFilterMode === 'UNAUDITED' && i.auditStatus) return false;
+      if (auditFilterMode === 'ISSUE' && (!i.auditStatus || i.auditStatus === '正確')) return false;
+      if (kw && !`${i.major} ${i.loc} ${i.name} ${i.fdxid}`.toLowerCase().includes(kw)) return false;
+      return true;
+    });
+    auditIndex = 0;
+    renderAuditCurrent();
+  }
+  function renderAuditCurrent() {
+    if (auditFilteredItems.length === 0) {
+      document.getElementById('auditCardView').classList.add('hidden');
+      document.getElementById('auditEmptyState').classList.remove('hidden');
+      document.getElementById('audIndexText').textContent = '第 0 / 0 筆';
+      return;
+    }
+    document.getElementById('auditCardView').classList.remove('hidden');
+    document.getElementById('auditEmptyState').classList.add('hidden');
+
+    if (auditIndex >= auditFilteredItems.length) auditIndex = auditFilteredItems.length - 1;
+    if (auditIndex < 0) auditIndex = 0;
+
+    const item = auditFilteredItems[auditIndex];
+    document.getElementById('audIndexText').textContent = `第 ${auditIndex + 1} / ${auditFilteredItems.length} 筆`;
+    document.getElementById('audDispLoc').textContent = `${item.major}｜${item.loc}`;
+    document.getElementById('audDispSeq').textContent = `#${item.seq}`;
+    document.getElementById('audDispName').textContent = item.name;
+    document.getElementById('audDispSub').textContent = `藥碼：${item.fdxid} ｜ ${item.subcat}`;
+    document.getElementById('audNoteInput').value = item.auditNote || '';
+
+    const recBox = document.getElementById('audRecordBox');
+    if (item.auditStatus) {
+      const isOk = item.auditStatus === '正確';
+      recBox.className = isOk ? 'record-box' : 'record-box err-box';
+      recBox.innerHTML = `<strong>前次查核：${item.auditStatus}</strong>（${item.auditUser || ''} ${shortTime(item.auditTime)}）` +
+        (item.auditNote ? `<br>備註：${item.auditNote}` : '');
+    } else {
+      recBox.className = 'record-box hidden';
+    }
+  }
+  function moveAuditItem(delta) {
+    if (auditFilteredItems.length === 0) return;
+    auditIndex = (auditIndex + delta + auditFilteredItems.length) % auditFilteredItems.length;
+    renderAuditCurrent();
+  }
+  function submitAuditResult(status) {
+    if (auditFilteredItems.length === 0) return;
+    const item = auditFilteredItems[auditIndex];
+    let note = document.getElementById('audNoteInput').value.trim();
+
+    if (status === '料位號錯誤' && !note) {
+      const input = prompt(`「${item.name}」料位號錯誤，請輸入正確的料位號或說明（可直接按確定略過）：`, '');
+      if (input === null) return;
+      note = input.trim();
+    }
+
+    const nowStr = nowLocalStr();
+    item.auditStatus = status;
+    item.auditNote = note;
+    item.auditUser = currentUser;
+    item.auditTime = nowStr;
+
+    enqueueJob('audit', {
+      seq: item.seq, major: item.major, group: item.group, loc: item.loc,
+      fdxid: item.fdxid, name: item.name, status: status, note: note,
+      user: currentUser, type: '料位查核'
+    });
+
+    showToast(`${item.loc}：${status}`);
+
+    if (auditFilterMode !== 'ALL') {
+      applyAuditFilter();
+    } else {
+      updateAuditProgressText();
+      if (auditIndex < auditFilteredItems.length - 1) { auditIndex++; renderAuditCurrent(); }
+      else { renderAuditCurrent(); showToast('已是本區最後一筆！'); }
+    }
+  }
+
+  // ================= 架上多藥回報彈窗 =================
+  function openAuditExtraModal() {
+    document.getElementById('audExtraSearch').value = '';
+    document.getElementById('audExtraList').innerHTML = '';
+    document.getElementById('audExtraLoc').value = '';
+    document.getElementById('audExtraName').value = '';
+    document.getElementById('audExtraId').value = '';
+    document.getElementById('audExtraNote').value = '';
+    if (auditFilteredItems.length > 0) {
+      const cur = auditFilteredItems[auditIndex];
+      document.getElementById('audExtraLoc').placeholder = `例如：${cur.major} ${cur.loc}`;
+    }
+    document.getElementById('auditExtraModal').classList.remove('hidden');
+  }
+  function closeAuditExtraModal() { document.getElementById('auditExtraModal').classList.add('hidden'); }
+  function renderAuditExtraSearch() {
+    const kw = document.getElementById('audExtraSearch').value.trim().toLowerCase();
+    const listEl = document.getElementById('audExtraList');
+    if (!kw) { listEl.innerHTML = ''; return; }
+    const seen = new Set();
+    const meds = [];
+    for (const i of allItems) {
+      if (seen.has(i.fdxid)) continue;
+      if (`${i.fdxid} ${i.name}`.toLowerCase().includes(kw)) {
+        seen.add(i.fdxid); meds.push(i);
+        if (meds.length >= 15) break;
+      }
+    }
+    listEl.innerHTML = '';
+    meds.forEach(m => {
+      const btn = document.createElement('button');
+      btn.className = 'bind-item';
+      btn.innerHTML = `<div style="font-weight:700; color:#b45309; font-size:13px;">${m.fdxid}</div><div style="font-size:12px; color:#334155;">${m.name}</div>`;
+      btn.onclick = () => {
+        document.getElementById('audExtraName').value = m.name;
+        document.getElementById('audExtraId').value = m.fdxid;
+        listEl.innerHTML = '';
+      };
+      listEl.appendChild(btn);
+    });
+  }
+  function submitAuditExtra() {
+    const loc = document.getElementById('audExtraLoc').value.trim();
+    const name = document.getElementById('audExtraName').value.trim();
+    const fdxid = document.getElementById('audExtraId').value.trim() || '未填';
+    const note = document.getElementById('audExtraNote').value.trim();
+    if (!loc || !name) { alert('請填寫「實際所在料位號」與「藥品名稱」'); return; }
+
+    const curMajor = document.getElementById('audMajor').value !== 'ALL'
+      ? document.getElementById('audMajor').value
+      : (auditFilteredItems.length > 0 ? auditFilteredItems[auditIndex].major : '');
+    const curGroup = document.getElementById('audGroup').value !== 'ALL'
+      ? document.getElementById('audGroup').value
+      : (auditFilteredItems.length > 0 ? auditFilteredItems[auditIndex].group : '');
+
+    enqueueJob('audit', {
+      seq: 'EXTRA-' + Date.now().toString().slice(-5),
+      major: curMajor, group: curGroup, loc: loc, fdxid: fdxid, name: name,
+      status: '架上多出此藥', note: note, user: currentUser, type: '架上多藥'
+    });
+
+    showToast(`已回報架上多藥：${name}`);
+    closeAuditExtraModal();
+  }
+</script>
+</body>
+</html>
