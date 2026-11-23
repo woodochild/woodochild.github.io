@@ -233,6 +233,11 @@
 
     <!-- 即時鏡頭掃碼畫面 -->
     <div id="scannerView" class="scanner-wrap hidden">
+      <div style="display:flex; gap:8px;">
+        <button type="button" id="zoomBtn" class="nav-btn" style="flex:1; padding:8px; font-size:13px;" onclick="toggleZoom()">🔍 變焦：2x</button>
+        <button type="button" id="torchBtn" class="nav-btn" style="flex:1; padding:8px; font-size:13px;" onclick="toggleTorch()">💡 補光燈：關</button>
+        <button type="button" id="voiceBtn" class="nav-btn" style="flex:1; padding:8px; font-size:13px;" onclick="toggleVoiceRead()">🔊 語音：關</button>
+      </div>
       <div id="live-reader"></div>
       <div id="scanStatus" class="scan-status">📷 請將藥盒條碼對準上方掃描框</div>
       <div id="scanNotFoundBox" class="hidden" style="background:#fef2f2; border:1px solid #fecaca; border-radius:10px; padding:14px; text-align:center;">
@@ -487,6 +492,33 @@
   ];
 
   // ================= 掃碼成功提示音 =================
+  let voiceReadEnabled = false;
+
+  function toggleVoiceRead() {
+    if (!('speechSynthesis' in window)) {
+      showToast('此瀏覽器不支援語音報讀');
+      return;
+    }
+    voiceReadEnabled = !voiceReadEnabled;
+    const btn = document.getElementById('voiceBtn');
+    btn.textContent = voiceReadEnabled ? '🔊 語音：開' : '🔊 語音：關';
+    btn.style.background = voiceReadEnabled ? '#eff6ff' : '#fff';
+    btn.style.borderColor = voiceReadEnabled ? '#2563eb' : '#cbd5e1';
+    if (voiceReadEnabled) speakDrugName('語音報讀已開啟');
+    else window.speechSynthesis.cancel();
+  }
+
+  function speakDrugName(text) {
+    if (!text || !('speechSynthesis' in window)) return;
+    try {
+      window.speechSynthesis.cancel();
+      const utter = new SpeechSynthesisUtterance(String(text));
+      utter.lang = 'zh-TW';
+      utter.rate = 1.15; // 語速微快，盤點比較俐落
+      window.speechSynthesis.speak(utter);
+    } catch (e) {}
+  }
+
   function playBeep() {
     try {
       if (navigator.vibrate) navigator.vibrate(80);
@@ -924,6 +956,7 @@
       document.getElementById('scanStatus').textContent = '可點下方「綁定現有藥品」建立永久條碼對照';
       return;
     }
+    if (voiceReadEnabled) speakDrugName(match.name);
     document.getElementById('scannerView').classList.add('hidden');
     filteredItems = [{
       seq: 'SCAN-' + Date.now().toString().slice(-6),
